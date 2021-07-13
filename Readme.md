@@ -1,16 +1,16 @@
 # Simple python client for GROBID REST services
 
-This Python client can be used to process in an efficient concurrent manner a set of PDF in a given directory by the [GROBID](https://github.com/kermitt2/grobid) service. It includes a command line for processing PDF on a file system and write results in a given output directory and a library for import in other python scripts. 
+这个Python client可以用来通过[GROBID](https://github.com/kermitt2/grobid)服务以高效的并发方式处理指定目录下的一组PDF。它包括一个命令行，用于在文件系统上处理PDF，并将结果写入给定的输出目录，以及一个用于在其他python脚本中导入的库。
 
 ## Build and run
 
-You need first to install and start the *grobid* service, latest stable version, see the [documentation](http://grobid.readthedocs.io/). It is assumed that the server will run on the address `http://localhost:8070`. You can change the server address by editing the file `config.json`.
+你首先需要安装并启动*grobid*服务，最新的稳定版本，见[文档]（http://grobid.readthedocs.io/）。假设gobid将在地址`http://localhost:8070`上运行。你可以通过编辑文件`config.json`来改变服务器地址。
 
 ## Requirements
 
 This client has been developed and tested with Python `3.5` and should work with any higher `3.*` versions. It does not require any dependencies beyond the standard python ones.
 
-## Install
+## 安装
 
 Get the github repo:
 
@@ -22,7 +22,7 @@ python setup.py install
 
 
 
-There is nothing more to do to start using the python command lines, see the next section. 
+要开始使用python命令行，没有什么可做的了，请看下一节。
 
 ## Usage and options
 
@@ -71,17 +71,16 @@ Examples:
 
 > grobid_client --input ~/tmp/in2 --output ~/tmp/out processFulltextDocument
 
-This command will process all the PDF files present under the input directory recursively (files with extension `.pdf` only) with the `processFulltextDocument` service of GROBID, and write the resulting XML TEI files under the output directory, reusing the file name with a different file extension (`.tei.xml`), using the default `10` concurrent workers. 
-
-If `--output` is omitted, the resulting XML TEI documents will be produced alongside the PDF in the `--input` directory.
+该命令将使用GROBID的 "processFulltextDocument "服务，递归处理输入目录下的所有PDF文件（仅扩展名为".pdf "的文件），并在输出目录下写入生成的XML TEI文件，重复使用不同文件扩展名（".tei.xml"），使用默认的`10`并发。
+如果省略了`--output`，产生的XML TEI文件将与PDF一起在`--input`目录下产生。
 
 > grobid_client --input ~/tmp/in2 --output ~/tmp/out --n 20 processHeaderDocument
 
-This command will process all the PDF files present in the input directory (files with extension `.pdf` only) with the `processHeaderDocument` service of GROBID, and write the resulting XML TEI files under the output directory, reusing the file name with a different file extension (`.tei.xml`), using `20` concurrent workers. 
+这个命令将用GROBID的 "processHeaderDocument "服务处理所有存在于输入目录中的PDF文件（仅扩展名为".pdf "的文件），并在输出目录下写入生成的XML TEI文件，重复使用不同文件扩展名（".tei.xml"），使用`20`并发。
 
-By default if an existing `.tei.xml` file is present in the output directory corresponding to a PDF in the input directory, this PDF will be skipped to avoid reprocessing several times the same PDF. To force the processing of PDF and over-write of existing TEI files, use the parameter `--force`.   
+默认情况下，如果在输出目录中存在一个现有的`.tei.xml`文件，对应于输入目录中的一个PDF，这个PDF将被跳过，以避免多次重新处理同一个PDF。要强制处理PDF和覆盖现有的TEI文件，请使用参数`--force`。
 
-The file `example.py` gives an example of usage from a another python script. 
+文件`example.py`给出了一个来自另一个python脚本的使用例子。
 
 ## Using the client in your python
 
@@ -111,7 +110,7 @@ Full text processing of __136 PDF__ (total 3443 pages, in average 25 pages per P
 
 ![Runtime Plot](resources/20180928112135.png)
 
-As complementary info, GROBID processing of header of the 136 PDF and with `n=10` takes 3.74 s (15 times faster than the complete full text processing because only the two first pages of the PDF are considered), 36 PDF/s. In similar conditions, extraction and structuring of bibliographical references takes 26.9 s (5.1 PDF/s).
+作为补充信息，GROBID对136份PDF的标题进行处理，并且`n=10'，需要3.74秒（比完整的全文处理快15倍，因为只考虑PDF的前两页），36 PDF/s。在类似条件下，书目参考文献的提取和结构化需要26.9秒（5.1 PDF/s）。
 
 ## Todo
 

@@ -26,12 +26,19 @@ from .client import ApiClient
 
 
 class GrobidClient(ApiClient):
-    def __init__(self, config_path="./config.json"):
+    def __init__(self, config_path="./config.json", grobid_server='l8', grobid_port='8280', batch_size=10, sleep_time=5,coordinates=['persName', 'figure', 'ref', 'biblStruct', 'formula']):
+        """
+        如果配置文件存在，加载配置文件，如果不存在，加载给定的配置信息
+        """
         self.config = None
-        self._load_config(config_path)
+        if config_path and os.path.exists(config_path):
+            print(f"配置文件存在，加载配置文件")
+            self._load_config(config_path)
+        else:
+            self.config = {'grobid_server': grobid_server, 'grobid_port': grobid_port, 'batch_size': batch_size, 'sleep_time': sleep_time, 'coordinates': coordinates}
 
     def _load_config(self, path="./config.json"):
-        """Load the json configuration
+        """加载grobid的配置，json文件
         """
         config_json = open(path).read()
         self.config = json.loads(config_json)
@@ -42,22 +49,29 @@ class GrobidClient(ApiClient):
             the_url += ":" + self.config["grobid_port"]
         the_url += "/api/isalive"
         try:
+            # 检测下isalive端口，判断是否运行中
             r = requests.get(the_url)
         except:
-            print("GROBID server does not appear up and running, the connection to the server failed")
+            print("GROBID服务似乎没有启动, 连接失败，请检查")
             exit(1)
 
         status = r.status_code
 
         if status != 200:
-            print("GROBID server does not appear up and running " + str(status))
+            print("GROBID没有启动和运行，返回状态码: " + str(status))
         else:
-            print("GROBID server is up and running")
+            print("GROBID服务正在运行种")
 
     def _output_file_name(self, pdf_file, input_path, output):
-        # we use ntpath here to be sure it will work on Windows too
+        """
+        组装出输出tei文件的名字和路径
+        """
         if output is not None:
-            pdf_file_name = str(os.path.relpath(os.path.abspath(pdf_file), input_path))
+            if input_path == pdf_file:
+                # 说明输入是单个pdf文件，那么我们获取pdf的文件名字，需要用另一种方式
+                pdf_file_name = os.path.basename(pdf_file)
+            else:
+                pdf_file_name = str(os.path.relpath(os.path.abspath(pdf_file), input_path))
             filename = os.path.join(
                 output, os.path.splitext(pdf_file_name)[0] + ".tei.xml"
             )
@@ -85,38 +99,28 @@ class GrobidClient(ApiClient):
         force=True,
         verbose=False,
     ):
+        """
+        如果input_path给定的是一个文件，或是一个目录
+        """
+        # 弃用batch_size，没啥用
         batch_size_pdf = self.config["batch_size"]
         pdf_files = []
-
-        for (dirpath, dirnames, filenames) in os.walk(input_path):
-            for filename in filenames:
-                if filename.endswith(".pdf") or filename.endswith(".PDF"):
-                    if verbose:
-                        try:
-                            print(filename)
-                        except Exception:
-                            # may happen on linux see https://stackoverflow.com/questions/27366479/python-3-os-walk-file-paths-unicodeencodeerror-utf-8-codec-cant-encode-s
-                            pass
-                    pdf_files.append(os.sep.join([dirpath, filename]))
-
-                    if len(pdf_files) == batch_size_pdf:
-                        self.process_batch(
-                            service,
-                            pdf_files,
-                            input_path,
-                            output,
-                            n,
-                            generateIDs,
-                            consolidate_header,
-                            consolidate_citations,
-                            include_raw_citations,
-                            include_raw_affiliations,
-                            teiCoordinates,
-                            force,
-                            verbose,
-                        )
-                        pdf_files = []
-
+        if os.path.isdir(input_path):
+            for (dirpath, dirnames, filenames) in os.walk(input_path):
+                for filename in filenames:
+                    if filename.endswith(".pdf") or filename.endswith(".PDF"):
+                        if verbose:
+                            try:
+                                print(filename)
+                            except Exception:
+                                # may happen on linux see https://stackoverflow.com/questions/27366479/python-3-os-walk-file-paths-unicodeencodeerror-utf-8-codec-cant-encode-s
+                                pass
+                        pdf_files.append(os.sep.join([dirpath, filename]))
+        else:
+            if os.path.exists(input_path):
+                pdf_files = [input_path]
+            else:
+                print(f"给定的pdf文件不存在{input_path}")
         # last batch
         if len(pdf_files) > 0:
             self.process_batch(
@@ -134,6 +138,9 @@ class GrobidClient(ApiClient):
                 force,
                 verbose,
             )
+            print(f"pdf处理完成")
+        else:
+            print(f"未发现任何pdf文件，请检查路径")
 
     def process_batch(
         self,
@@ -158,7 +165,7 @@ class GrobidClient(ApiClient):
         with concurrent.futures.ProcessPoolExecutor(max_workers=n) as executor:
             results = []
             for pdf_file in pdf_files:
-                # check if TEI file is already produced
+                # filename是输出文件的名字，检测输出的TEI文件是否存在
                 filename = self._output_file_name(pdf_file, input_path, output)
                 if not force and os.path.isfile(filename):
                     print(filename, "already exist, skipping... (use --force to reprocess pdf input files)")
@@ -179,16 +186,17 @@ class GrobidClient(ApiClient):
 
         for r in concurrent.futures.as_completed(results):
             pdf_file, status, text = r.result()
+            # filename是输出文件的TEI名字
             filename = self._output_file_name(pdf_file, input_path, output)
-
             if text is None:
-                print("Processing of", pdf_file, "failed with error", str(status))
+                print("处理", pdf_file, "时发生错误，错误状态: ", str(status))
             else:
                 # writing TEI file
                 try:
                     pathlib.Path(os.path.dirname(filename)).mkdir(parents=True, exist_ok=True)
                     with open(filename,'w',encoding='utf8') as tei_file:
                         tei_file.write(text)
+                        print(f"处理完成pdf文件{pdf_file}，生成的TEI文件{filename}")
                 except OSError:
                    print("Writing resulting TEI XML file", filename, "failed")
 
@@ -263,26 +271,26 @@ def main():
     parser = argparse.ArgumentParser(description="Client for GROBID services")
     parser.add_argument(
         "service",
-        help="one of [processFulltextDocument, processHeaderDocument, processReferences]",
+        help="选择使用grobid的哪个服务 [processFulltextDocument, processHeaderDocument, processReferences]",
     )
     parser.add_argument(
-        "--input", default=None, help="path to the directory containing PDF to process"
+        "--input", default=None, help="处理pdf的文件的路径，递归查找并处理的"
     )
     parser.add_argument(
         "--output",
         default=None,
-        help="path to the directory where to put the results (optional)",
+        help="输出目录，可选，保存解析后的pdf的TEI文件的路径",
     )
     parser.add_argument(
         "--config",
         default="./config.json",
-        help="path to the config file, default is ./config.json",
+        help="配置文件，加载客户端的配置 ./config.json",
     )
-    parser.add_argument("--n", default=10, help="concurrency for service usage")
+    parser.add_argument("--n", default=10, help="并发，默认使用多少并发同时处理pdf，即同时建立多少个连接")
     parser.add_argument(
         "--generateIDs",
         action="store_true",
-        help="generate random xml:id to textual XML elements of the result files",
+        help="生成随机的 xml:id to textual XML elements of the result files",
     )
     parser.add_argument(
         "--consolidate_header",
@@ -302,22 +310,22 @@ def main():
     parser.add_argument(
         "--include_raw_affiliations",
         action="store_true",
-        help="call GROBID requestiong the extraciton of raw affiliations",
+        help="GROBID提取原始的机构",
     )
     parser.add_argument(
         "--force",
         action="store_true",
-        help="force re-processing pdf input files when tei output files already exist",
+        help="重新处理pdf文件，即使tei文件已经存在",
     )
     parser.add_argument(
         "--teiCoordinates",
         action="store_true",
-        help="add the original PDF coordinates (bounding boxes) to the extracted elements",
+        help="为提取的元素附加坐标，即(bounding boxes)",
     )
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help="print information about processed files in the console",
+        help="打印verbose信息",
     )
 
     args = parser.parse_args()
